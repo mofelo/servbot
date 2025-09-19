@@ -1,0 +1,21 @@
+name: Keep HuggingFace Space Alive
+
+on:
+  schedule:
+    - cron: '0 */8 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-space:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install requests
+        run: pip install requests
+      - name: Ping HuggingFace Space
+        run: python ping_hf_space.py
