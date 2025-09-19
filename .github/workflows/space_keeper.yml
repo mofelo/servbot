@@ -1,19 +1,43 @@
-name: 🛡️ Gradio Space 每6小时保活
+name: 🛡️ Gradio Space 每6小时保活+ webhook
 
 on:
   schedule:
     # 每6小时运行一次 (00:00, 06:00, 12:00, 18:00 UTC)
     - cron: '0 */6 * * *'
   workflow_dispatch:  # 允许手动触发
-  push:
-    branches: [ main ]
-
+    inputs:
+      mode:
+        description: '运行模式'
+        required: true
+        default: 'ping'
+        type: choice
+        options:
+        - ping
+        - restart
+  # 新增：通过 repository_dispatch 接收 Webhook
+  repository_dispatch:
+    types: [space-updated, space-restarted]
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     
+    # 根据触发方式设置模式
     steps:
+    - name: 🎯 确定运行模式
+      id: mode
+      run: |
+        if [[ "${{ github.event_name }}" == "schedule" ]]; then
+          echo "mode=ping" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+          if [[ "${{ github.event.action }}" == "space-updated" ]]; then
+            echo "mode=ping" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.action }}" == "space-restarted" ]]; then
+            echo "mode=restart" >> $GITHUB_OUTPUT
+          fi
+        fi
     - name: 📥 检出代码
       uses: actions/checkout@v4
       
@@ -39,15 +63,10 @@ jobs:
     - name: 🎯 保活 Space
       env:
         HF_SPACE_URL: ${{ secrets.HF_SPACE_URL }}
+        HF_USERNAME: ${{ secrets.HF_USERNAME }}
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        echo "🚀 开始保活流程..."
-        echo "📍 目标: ${HF_SPACE_URL:-https://ka1q-shang.hf.space}"
-        echo "🕐 时间: $(date)"
+        MODE="${{ steps.mode.outputs.mode }}"
+        echo "🔧 运行模式: $MODE (触发: ${{ github.event_name }})"
         
-        python space_keeper.py "${HF_SPACE_URL:-https://ka1q-shang.hf.space}"
-        
-    - name: 📊 运行报告
-      if: always()
-      run: |
-        echo "✅ 保活任务完成！"
-        echo "📅 日志时间: $(date)"
+        python space_keeper.py --mode "$MODE"
