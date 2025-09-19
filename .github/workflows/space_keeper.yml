@@ -1,65 +1,53 @@
-name: 🛡️ Gradio Space 自动保活
+name: 🛡️ Gradio Space 每6小时保活
 
 on:
   schedule:
-    # 每6小时运行一次 (0,6,12,18点)
+    # 每6小时运行一次 (00:00, 06:00, 12:00, 18:00 UTC)
     - cron: '0 */6 * * *'
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:  # 允许手动触发
   push:
-    branches: [ main, master ]
-    paths:
-      - 'space_keeper.py'
-      - '.github/workflows/space_keeper.yml'
+    branches: [ main ]
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    
-    env:
-      HF_SPACE_URL: ${{ secrets.HF_SPACE_URL }}
+    timeout-minutes: 8
     
     steps:
     - name: 📥 检出代码
       uses: actions/checkout@v4
       
-    - name: 🐍 设置 Python 环境
+    - name: 🐍 设置 Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         
-    - name: 🔧 安装系统依赖
+    - name: 🔧 安装 Chrome
       run: |
-        # 安装 Chrome
         sudo apt-get update
-        sudo apt-get install -y wget gnupg google-chrome-stable
+        sudo apt-get install -y wget gnupg
+        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        google-chrome --version
         
     - name: 📦 安装 Python 依赖
       run: |
-        python -m pip install --upgrade pip
         pip install selenium webdriver-manager
         
-    - name: 🎯 保活 Gradio Space
+    - name: 🎯 保活 Space
       env:
-        URL: ${{ env.HF_SPACE_URL || 'https://ka1q-shang.hf.space' }}
+        HF_SPACE_URL: ${{ secrets.HF_SPACE_URL }}
       run: |
-        echo "🚀 开始每6小时保活流程..."
-        echo "📍 目标 Space: $URL"
-        echo "🕐 当前时间: $(date)"
-        echo "GITHUB_ACTIONS=true" >> $GITHUB_ENV
+        echo "🚀 开始保活流程..."
+        echo "📍 目标: ${HF_SPACE_URL:-https://ka1q-shang.hf.space}"
+        echo "🕐 时间: $(date)"
         
-        python space_keeper.py "$URL" --wait 15
+        python space_keeper.py "${HF_SPACE_URL:-https://ka1q-shang.hf.space}"
         
-    - name: 📊 成功通知
-      if: success()
+    - name: 📊 运行报告
+      if: always()
       run: |
-        echo "✅ Gradio Space 保活成功！🎉"
-        echo "⏰ 下次运行: $(date -d '6 hours' '+%Y-%m-%d %H:%M:%S')"
-        echo "💡 每6小时自动保活，Space 保持活跃！"
-        
-    - name: ⚠️ 失败通知
-      if: failure()
-      run: |
-        echo "❌ Gradio Space 保活失败！😱"
-        echo "🔍 请检查日志详情"
-        echo "💡 可能需要手动访问一次确认状态"
+        echo "✅ 保活任务完成！"
+        echo "📅 日志时间: $(date)"
